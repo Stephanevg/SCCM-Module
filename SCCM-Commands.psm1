@@ -1,6 +1,6 @@
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 #                                                                                                                           
-# 																															Stephane van Gulick / PowerShellDistrict.Com
+# 																															Stephane van Gulick / http://PowerShellDistrict.Com
 # 																															Rikard Ronnkvist / snowland.se
 #																															Michael Niehaus / http://blogs.technet.com/mniehaus
 #  Usage:
@@ -8,7 +8,7 @@
 #   PS:>Import-Module SCCM-Commands
 #   PS:>Get-SCCMCommands
 #
-#  Current Version : 2.0
+#  Current Version : 2.2.0
 #
 #  History:
 #
@@ -26,6 +26,7 @@
 #  2014-01-01	Stéphane van Gulick	New Functions:[Folders] : Get-SCCMFolder, New-SCCMFolder, Remove-SCCMFolder, Move-SCCMFolderContent
 #  2014-01-01						New Functions:[ComputerAssociation] : Get-SCCMComputerAssociation, New-SCCMComputerAssociation, Remove-SCCMComputerAssocation
 #  2014-01-01						New Functions:[Helper functions] : Convert-WMITime, ConvertFrom-WMITime, Get-ContentID, Convert-SQLTimeToWMITime
+#  2015-25-06   Stéphane van Gulick Added Missing GEt-SCCMPackage, New-SCCMPAckage Function.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 #--------------------------------------Version 1.0-------------------------
@@ -1009,7 +1010,6 @@ Function Get-SCCMSoftwareUpdateList {
    Sccm Connection object created with Connect-SccmServer
 .PARAMETER Full
 	Returns all the properties of the software update list.
-
 .EXAMPLE
 	$Connect-SccmServer = -SccmServer "MyServer01"
   	Get-SCCMSoftwareUpdatelist -SccmServer $connection
@@ -2452,7 +2452,9 @@ Function Update-SCCMPackageSourcePath {
 }
  
 
-#EndRegion
+
+
+#endregion
 
 #-------------------- Computer Assocciation -------------------
 
@@ -2878,6 +2880,152 @@ Function Move-SCCMFolderContent {
 
 #EndRegion
 
+# - - - - - - - - - - SoftwarePackage - - - - - - - - - - 
+Function Get-SCCMPackage {
+    [CmdletBinding()]
+    PARAM (
+        [Parameter(Mandatory=$true, HelpMessage="SCCM Server",ValueFromPipeline=$true)][Alias("Server","SmsServer")][System.Object] $SccmServer,
+        [Parameter(Mandatory=$false, HelpMessage="Optional Filter on query")][String] $Filter = $null
+    )
+ 
+    PROCESS {
+        return Get-SCCMObject -sccmServer $SccmServer -class "SMS_Package" -Filter $Filter
+    }
+}
+
+Function New-SCCMPackage {
+    [CmdletBinding()]
+    PARAM (
+        [Parameter(Mandatory=$true, HelpMessage="SCCM Server")][Alias("Server","SmsServer")][System.Object] $SccmServer,
+        [Parameter(Mandatory=$true, HelpMessage="Package Name", ValueFromPipeline=$true)][String] $Name,
+ 
+        [Parameter(Mandatory=$false, HelpMessage="Package Version")][String] $Version = "",
+        [Parameter(Mandatory=$false, HelpMessage="Package Manufacturer")][String] $Manufacturer = "",
+        [Parameter(Mandatory=$false, HelpMessage="Package Language")][String] $Language = "",
+        [Parameter(Mandatory=$false, HelpMessage="Package Description")][String] $Description = "",
+        [Parameter(Mandatory=$false, HelpMessage="Package Data Source Path")][String] $PkgSourcePath = "",
+        [Parameter(Mandatory=$false, HelpMessage="Package Sharename")][String] $PkgShareName = ""
+    )
+ 
+    PROCESS {
+        $packageClass = [WMICLASS]"\\$($SccmServer.Machine)\$($SccmServer.Namespace):SMS_Package"
+        $newPackage = $packageClass.createInstance() 
+ 
+        $newPackage.Name = $Name
+        if ($Version -ne "")        { $newPackage.Version = $Version }
+        if ($Manufacturer -ne "")   { $newPackage.Manufacturer = $Manufacturer }
+        if ($Language -ne "")       { $newPackage.Language = $Language }
+        if ($Description -ne "")    { $newPackage.Description = $Description }
+ 
+        if ($PkgSourcePath -ne "") {
+            $newPackage.PkgSourceFlag = 2  # Direct (3 = Compressed)
+            $newPackage.PkgSourcePath = $PkgSourcePath
+            if ($PkgShareName -ne "") {
+                $newPackage.ShareName = $PkgShareName
+                $newPackage.ShareType = 2
+            }
+        } else {
+            $newPackage.PkgSourceFlag = 1  # No source
+            $newPackage.PkgSourcePath = $null
+        }
+        $newPackage.Put()
+ 
+        $newPackage.Get()
+        Write-Verbose "Return the new package with ID $($newPackage.PackageID)"
+        return $newPackage
+    }
+}
+
+# - - - - - - - - - - Program - - - - - - - - - - 
+Function Get-SCCMProgram {
+    [CmdletBinding()]
+    PARAM (
+        [Parameter(Mandatory=$true, HelpMessage="SCCM Server",ValueFromPipeline=$true)][Alias("Server","SmsServer")][System.Object] $SccmServer,
+        [Parameter(Mandatory=$false, HelpMessage="Optional Filter on query")][String] $Filter = $null
+    )
+ 
+    PROCESS {
+        return Get-SCCMObject -sccmServer $SccmServer -class "SMS_Program" -Filter $Filter
+    }
+}
+
+Function New-SCCMProgram {
+    [CmdletBinding()]
+    PARAM (
+        [Parameter(Mandatory=$true, HelpMessage="SCCM Server")][Alias("Server","SmsServer")][System.Object] $SccmServer,
+        [Parameter(Mandatory=$true, HelpMessage="Program Name")][String] $PrgName ,
+        [Parameter(Mandatory=$true, HelpMessage="Program PackageID")]$PrgPackageID,
+        [Parameter(Mandatory=$false, HelpMessage="Program Comment")][String] $PrgComment ,
+        [Parameter(Mandatory=$false, HelpMessage="Program Description")][String] $PrgDescription ,
+        [Parameter(Mandatory=$false, HelpMessage="Program Requierements")][String] $PrgRequirements ,
+        [Parameter(Mandatory=$false, HelpMessage="Dependent Program")][String] $PrgDependentProgram ,
+        [Parameter(Mandatory=$false, HelpMessage="Drive Letter")][String] $PrgDriveLetter ,
+        [Parameter(Mandatory=$false, HelpMessage="Application Hierarchy")][String] $PrgAppHierarchy,
+        [Parameter(Mandatory=$false, HelpMessage="RemovalKey")][String] $PrgRemovalKey,
+        [Parameter(Mandatory=$false, HelpMessage="Program CommandLine")][String] $PrgCommandLine,
+        [Parameter(Mandatory=$false, HelpMessage="Program MaxRunTime")]$PrgMaxRunTime,
+        [Parameter(Mandatory=$false, HelpMessage="Program Diskspace Requirement")]$PrgSpaceReq,
+        [Parameter(Mandatory=$false, HelpMessage="Program Working Directory")][String] $PrgWorkDir,
+        [Parameter(Mandatory=$false, HelpMessage="Program Flags")] $PrgFlags
+    )
+    PROCESS {
+        $programClass = [WMICLASS]"\\$($SccmServer.Machine)\$($SccmServer.Namespace):SMS_Program"
+        $newProgram = $programClass.createInstance()
+
+        if ($PrgName -ne "") {$newProgram.ProgramName = $PrgName}
+        if ($PrgPackageID -ne "") {$newProgram.PackageID = $PrgPackageID}
+        if ($PrgCommandLine -ne "") { $newProgram.CommandLine = $PrgCommandLine }
+        if ($PrgComment -ne "") { $newProgram.Comment = $PrgComment }       
+        if ($PrgDescription -ne ""){$newProgram.Description=$PrgDescription}
+        if ($PrgRequirements -ne ""){$newProgram.Requirements=$PrgRequirements}
+        if ($PrgDependentProgram -ne ""){$newProgram.DependentProgram=$PrgDependentProgram}
+        if ($PrgDriveLetter -ne ""){$newProgram.DriveLetter=$PrgDriveLetter}
+        if ($PrgWorkDir -ne "") { $newProgram.WorkingDirectory = $PrgWorkDir }
+        if ($PrgAppHierarchy -ne ""){$newProgram.ApplicationHierarchy=$PrgAppHierarchy}
+        if ($PrgFlags -ne "") { $newProgram.ProgramFlags = $PrgFlags}
+        if ($PrgSpaceReq -ne "") { $newProgram.DiskSpaceReq = $PrgSpaceReq }
+        if ($PrgMaxRunTime -ne "") { $newProgram.Duration = $PrgMaxRunTime}
+        if ($PrgRemovalKey -ne ""){$newProgram.RemovalKey=$PrgRemovalKey}      
+        if ($PrgFlags -ne "") { $newProgram.ProgramFlags = $PrgFlags}
+        
+        $newProgram.Put()
+        $newProgram.Get()
+        Write-Verbose "Return the new program for Package $($newProgram.PackageID)"
+        return $newProgram
+    }
+}
+
+Function Add-SCCMProgramOSDetails {
+    [CmdletBinding()]
+   # -ProgramName $programName -maxVersion $maxVersion -minVersion $minVersion -osName $osName -platform $platform
+    PARAM (
+        [Parameter(Mandatory=$true,  HelpMessage="SCCM Server")][Alias("Server","SmsServer")][System.Object] $SccmServer,
+        [Parameter(Mandatory=$true,  HelpMessage="ProgramName")] [String]$programName,
+        [Parameter(Mandatory=$true, HelpMessage="Max Version")] [String] $maxVersion,
+        [Parameter(Mandatory=$true, HelpMessage="MinVersion")] [String] $minVersion,
+        [Parameter(Mandatory=$true, HelpMessage="OS Name")] [String] $osName,
+        [Parameter(Mandatory=$true,  HelpMessage="Platform")] [String] $platform
+    )
+ 
+    PROCESS {
+        # Get the specified collection (to make sure we have the lazy properties)
+        $program = Get-SCCMProgram -SccmServer $SccmServer -Filter ("ProgramName='$programName'")
+        $program.get()
+ 
+        
+            # Create a query rule
+            $osDetailsClass = [WMICLASS]"$($SccmServer.SccmProvider.NamespacePath):SMS_OS_Details"
+            $newOsDetails = $osDetailsClass.CreateInstance()
+            $newOsDetails.MaxVersion=$maxVersion
+            $newOsDetails.MinVersion=$minVersion
+            $newOsDetails.Name=$osName
+            $newOsDetails.Platform=$platform
+           
+            $program.SupportedOperatingSystems+=[System.Management.ManagementObject[]]$newOsDetails
+            $program.put()|out-null
+       
+    }
+}
 
 #---------------------Helper functions---
 
@@ -2905,10 +3053,8 @@ Function Convert-WMITime {
    
 .PARAMETER WMITime
 	WMI time (e.g : 20120802155521.601556+120)
-
 .PARAMETER Whatif
 	Permits to launch this script in "draft" mode. This means it will only show the results without really making generating the files.
-
 .PARAMETER Verbose
 	Allow to run the script in verbose mode for debbuging purposes.
    
@@ -2917,7 +3063,6 @@ Function Convert-WMITime {
 	
 .EXAMPLE
 	"20120802155521.601556+120" | convert-WMITime 
-
 .NOTES
 	-Author: Stephane van Gulick
 	-Email : 
@@ -2925,7 +3070,6 @@ Function Convert-WMITime {
 	-LastModifiedDate: 02/08/2012
 	-Version: 0.3
 	-History:
-
 .LINK
 	
 #>
@@ -2957,10 +3101,8 @@ Function ConvertTo-WMITime {
    
 .PARAMETER Time
 	A normal date and time format ( get-date)
-
 .PARAMETER Whatif
 	Permits to launch this script in "draft" mode.
-
 .PARAMETER Verbose
 	Allow to run the script in verbose mode for debbuging purposes.
    
@@ -2969,7 +3111,6 @@ Function ConvertTo-WMITime {
 	
 .EXAMPLE
 	get-date | convert-ToWMITime -time 
-
 .NOTES
 	-Author: Stephane van Gulick
 	-Email : 
@@ -2977,7 +3118,6 @@ Function ConvertTo-WMITime {
 	-LastModifiedDate: 02/08/2012
 	-Version: 0.4
 	-History:
-
 .LINK
 	 
 #>
@@ -3010,10 +3150,8 @@ Function Convert-SQLTimeToWMITime {
    
 .PARAMETER Time
 	SQL time string
-
 .PARAMETER Whatif
 	Permits to launch this script in "draft" mode.
-
 .PARAMETER Verbose
 	Allow to run the script in verbose mode for debbuging purposes.
    
@@ -3022,7 +3160,6 @@ Function Convert-SQLTimeToWMITime {
 	
 .EXAMPLE
 	06.12.2013 16:24:00 | convertSQLTime-ToWMITime 
-
 .NOTES
 	-Author: Stephane van Gulick
 	-Email : 
@@ -3030,7 +3167,6 @@ Function Convert-SQLTimeToWMITime {
 	-LastModifiedDate: 19/12/2013
 	-Version: 0.4
 	-History:
-
 .LINK
 	 
 #>

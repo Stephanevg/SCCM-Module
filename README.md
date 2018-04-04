@@ -10,5 +10,5 @@ The SCCM PowerShell module version 2.0 contains today 63 cmdlets for managing th
 
 Since WMI is still the underlying technology used by SCCM 2012, a great part of the cmdlets (or logic) can be re-used for SCCM 2012 management.
 
-The module is provided "AS IS", for testing purposes only.
+The module is provided "AS IS".
 
